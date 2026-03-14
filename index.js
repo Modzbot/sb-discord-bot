@@ -345,6 +345,17 @@ async function verifyUser(discordId, tokens, identityData) {
   // Assign role
   await assignTierRole(member, tier);
 
+  // Set anonymous nickname (Member-XXXX format)
+  try {
+    const randomNum = Math.floor(1000 + Math.random() * 9000); // 4-digit number: 1000-9999
+    const anonymousNickname = `Member-${randomNum}`;
+    await member.setNickname(anonymousNickname);
+    console.log(`Set nickname for ${member.user.username} to ${anonymousNickname}`);
+  } catch (nicknameError) {
+    // Gracefully handle cases where nickname can't be set (server owner, higher role, etc.)
+    console.log(`Could not set nickname for ${member.user.username}: ${nicknameError.message}`);
+  }
+
   // Create private channel if not exists
   let channelId = existingUser?.private_channel_id;
   if (!channelId) {
