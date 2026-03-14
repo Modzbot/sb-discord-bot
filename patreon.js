@@ -1,7 +1,8 @@
 const axios = require('axios');
 
 const PATREON_API = 'https://www.patreon.com/api/oauth2/v2';
-const PATREON_AUTH = 'https://www.patreon.com/oauth2';
+const PATREON_AUTH_URL = 'https://www.patreon.com/oauth2/authorize';
+const PATREON_TOKEN_URL = 'https://www.patreon.com/api/oauth2/token';
 
 // Tier name mapping (adjust these to match your actual Patreon tier names)
 const TIER_MAPPING = {
@@ -18,11 +19,11 @@ function getOAuthUrl(state) {
     scope: 'identity identity[email] identity.memberships',
     state
   });
-  return `${PATREON_AUTH}/authorize?${params}`;
+  return `${PATREON_AUTH_URL}?${params}`;
 }
 
 async function exchangeCode(code) {
-  const response = await axios.post(`${PATREON_AUTH}/token`, new URLSearchParams({
+  const response = await axios.post(PATREON_TOKEN_URL, new URLSearchParams({
     code,
     grant_type: 'authorization_code',
     client_id: process.env.PATREON_CLIENT_ID,
