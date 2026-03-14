@@ -16,12 +16,13 @@ let CHANNELS = {
   announcements: null,
   princessUploads: null,
   part2Uploads: null,
-  tailoredUploads: null
+  tailoredUploads: null,
+  verification: null
 };
 
 let CATEGORY_ID = null;
 
-// Create Discord client
+// Create Discord client with invisible presence
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -29,7 +30,10 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers
   ],
-  partials: [Partials.Channel, Partials.Message]
+  partials: [Partials.Channel, Partials.Message],
+  presence: {
+    status: 'invisible' // Hide bot from member list
+  }
 });
 
 // Express server for OAuth callback and webhooks
@@ -155,10 +159,77 @@ async function setupGuild() {
       ]
     });
 
+  // Create or find verification channel with proper permissions
+  CHANNELS.verification = guild.channels.cache.find(c => c.name === 'verification' || c.name === '✅-verification');
+  if (!CHANNELS.verification) {
+    CHANNELS.verification = await guild.channels.create({
+      name: '✅-verification',
+      type: ChannelType.GuildText,
+      topic: 'Verify your Patreon subscription to access exclusive content',
+      permissionOverwrites: [
+        {
+          id: guild.id, // @everyone
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.UseApplicationCommands],
+          deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.AddReactions]
+        }
+      ]
+    });
+  } else {
+    // Ensure @everyone has USE_APPLICATION_COMMANDS in existing verification channel
+    await CHANNELS.verification.permissionOverwrites.edit(guild.id, {
+      ViewChannel: true,
+      UseApplicationCommands: true,
+      SendMessages: false,
+      AddReactions: false
+    });
+  }
+
   console.log('Channels ready');
 
   // Register slash commands
   await registerCommands();
+
+  // Send/update verification welcome message with button
+  await setupVerificationMessage(guild);
+}
+
+async function setupVerificationMessage(guild) {
+  if (!CHANNELS.verification) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle('🔐 Patreon Verification')
+    .setDescription(
+      '**Welcome to the community!**\n\n' +
+      'Click the button below to verify your Patreon subscription and unlock exclusive content.\n\n' +
+      '• Connect your Patreon account\n' +
+      '• Get your tier role automatically\n' +
+      '• Access your private channel\n\n' +
+      '*Make sure you have an active Patreon subscription before verifying.*'
+    )
+    .setColor(0xFF424D)
+    .setFooter({ text: 'Your Patreon tier determines your access level' });
+
+  const row = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId('verify_patreon')
+        .setLabel('🔗 Verify with Patreon')
+        .setStyle(ButtonStyle.Primary)
+    );
+
+  // Check if we already have a verification message
+  const messages = await CHANNELS.verification.messages.fetch({ limit: 10 });
+  const botMessage = messages.find(m => m.author.id === client.user.id && m.components.length > 0);
+
+  if (botMessage) {
+    // Update existing message
+    await botMessage.edit({ embeds: [embed], components: [row] });
+    console.log('Updated verification message');
+  } else {
+    // Send new message
+    await CHANNELS.verification.send({ embeds: [embed], components: [row] });
+    console.log('Sent new verification message');
+  }
 }
 
 async function registerCommands() {
@@ -341,6 +412,31 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+  // Handle button interactions
+  if (interaction.isButton()) {
+    if (interaction.customId === 'verify_patreon') {
+      const state = db.createOAuthState(interaction.user.id);
+      const oauthUrl = patreon.getOAuthUrl(state);
+
+      const embed = new EmbedBuilder()
+        .setTitle('🔐 Patreon Verification')
+        .setDescription('Click the button below to connect your Patreon account and verify your subscription!')
+        .setColor(0xFF424D);
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setLabel('Connect Patreon')
+            .setStyle(ButtonStyle.Link)
+            .setURL(oauthUrl)
+            .setEmoji('🔗')
+        );
+
+      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      return;
+    }
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName } = interaction;
