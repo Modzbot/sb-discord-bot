@@ -21,6 +21,7 @@ let CHANNELS = {
 };
 
 let CATEGORY_ID = null;
+let TAILORED_CATEGORY_ID = null;
 
 // Create Discord client with invisible presence
 const client = new Client({
@@ -101,6 +102,22 @@ async function setupGuild() {
     });
   }
   CATEGORY_ID = category.id;
+
+  // Create or find category for Tailored private channels
+  let tailoredCategory = guild.channels.cache.find(c => c.name === '💜 Tailored Members' && c.type === ChannelType.GuildCategory);
+  if (!tailoredCategory) {
+    tailoredCategory = await guild.channels.create({
+      name: '💜 Tailored Members',
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: [
+        {
+          id: guild.id,
+          deny: [PermissionFlagsBits.ViewChannel]
+        }
+      ]
+    });
+  }
+  TAILORED_CATEGORY_ID = tailoredCategory.id;
 
   // Create or find admin upload channels
   let adminCategory = guild.channels.cache.find(c => c.name === 'Admin Uploads' && c.type === ChannelType.GuildCategory);
@@ -262,10 +279,14 @@ async function registerCommands() {
 // ============ VERIFICATION FLOW ============
 
 async function createPrivateChannel(guild, member, tier) {
+  // Tailored users go in the separate Tailored category, others go in Private Channels
+  const categoryId = tier === 'tailored' ? TAILORED_CATEGORY_ID : CATEGORY_ID;
+  
   const channel = await guild.channels.create({
     name: `${member.user.username}-private`,
     type: ChannelType.GuildText,
-    parent: CATEGORY_ID,
+    parent: categoryId,
+    nsfw: true, // Age-restricted by default
     permissionOverwrites: [
       {
         id: guild.id,
@@ -274,6 +295,10 @@ async function createPrivateChannel(guild, member, tier) {
       {
         id: member.id,
         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory]
+      },
+      {
+        id: client.user.id,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
       }
     ]
   });
