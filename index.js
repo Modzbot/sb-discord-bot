@@ -693,7 +693,7 @@ app.post('/webhook/patreon', async (req, res) => {
     const { data, included } = req.body;
     const patronId = data?.relationships?.user?.data?.id;
     
-    if (event === 'members:pledge:delete' || event === 'members:delete') {
+    if (event === 'members:pledge:delete' || event === 'members:delete' || event === 'pledges:delete') {
       // User unsubscribed - remove their access
       if (patronId) {
         const user = db.deleteUserByPatreonId(patronId);
